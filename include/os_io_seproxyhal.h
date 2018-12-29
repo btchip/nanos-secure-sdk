@@ -274,9 +274,13 @@ typedef struct ux_state_s {
         elements_current; // currently displayed UI element in a set of elements
     bagl_element_callback_t
         elements_preprocessor; // called before an element is displayed
-    button_push_callback_t button_push_handler;
+    button_push_callback_t button_push_handler;    
     unsigned int callback_interval_ms;
     bolos_ux_params_t params;
+
+    button_push_callback_t button_push_handler_original;
+    bagl_element_t *element_invert_cross;
+    bagl_element_t *element_invert_check;
 } ux_state_t;
 extern ux_state_t ux;
 
@@ -349,11 +353,14 @@ extern ux_state_t ux;
  */
 #define UX_REDISPLAY() UX_REDISPLAY_IDX(0)
 
+void ux_invert(void);
+
 #define UX_DISPLAY(elements_array, preprocessor)                               \
     ux.elements = elements_array;                                              \
     ux.elements_count = sizeof(elements_array) / sizeof(elements_array[0]);    \
     ux.button_push_handler = elements_array##_button;                          \
     ux.elements_preprocessor = preprocessor;                                   \
+    ux_invert();                                                               \
     UX_WAKE_UP();                                                              \
     UX_REDISPLAY();
 

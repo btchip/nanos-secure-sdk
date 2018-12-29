@@ -738,9 +738,17 @@ void io_seproxyhal_display_icon(bagl_component_t* icon_component, bagl_icon_deta
 #endif // !SEPROXYHAL_TAG_SCREEN_DISPLAY_RAW_STATUS
 }
 
-void io_seproxyhal_display_default(const bagl_element_t * element) {
+void io_seproxyhal_display_default(const bagl_element_t * element_param) {
+  bagl_element_t element;
+  memcpy(&element, element_param, sizeof(bagl_element_t));
+  if ((ux.element_invert_cross != NULL) && (element_param == ux.element_invert_cross)) {
+        element.component.icon_id = BAGL_GLYPH_ICON_CHECK;
+  }
+  if ((ux.element_invert_check != NULL) && (element_param == ux.element_invert_check)) {
+        element.component.icon_id = BAGL_GLYPH_ICON_CROSS;
+  }  
   // process automagically address from rom and from ram
-  unsigned int type = (element->component.type & ~(BAGL_FLAG_TOUCHABLE));
+  unsigned int type = (element.component.type & ~(BAGL_FLAG_TOUCHABLE));
 
   // avoid sending another status :), fixes a lot of bugs in the end
   if (io_seproxyhal_spi_is_status_sent()) {
@@ -748,11 +756,11 @@ void io_seproxyhal_display_default(const bagl_element_t * element) {
   }
 
   if (type != BAGL_NONE) {
-    if (element->text != NULL) {
-      unsigned int text_adr = PIC((unsigned int)element->text);
+    if (element.text != NULL) {
+      unsigned int text_adr = PIC((unsigned int)element.text);
       // consider an icon details descriptor is pointed by the context
-      if (type == BAGL_ICON && element->component.icon_id == 0) {
-        io_seproxyhal_display_icon(&element->component, (bagl_icon_details_t*)text_adr);
+      if (type == BAGL_ICON && element.component.icon_id == 0) {
+        io_seproxyhal_display_icon(&element.component, (bagl_icon_details_t*)text_adr);
       }
       else {
         unsigned short length = sizeof(bagl_component_t)+strlen((const char*)text_adr);
@@ -760,7 +768,7 @@ void io_seproxyhal_display_default(const bagl_element_t * element) {
         G_io_seproxyhal_spi_buffer[1] = length>>8;
         G_io_seproxyhal_spi_buffer[2] = length;
         io_seproxyhal_spi_send(G_io_seproxyhal_spi_buffer, 3);
-        io_seproxyhal_spi_send((unsigned char*)&element->component, sizeof(bagl_component_t));
+        io_seproxyhal_spi_send((unsigned char*)&element.component, sizeof(bagl_component_t));
         io_seproxyhal_spi_send((unsigned char*)text_adr, length-sizeof(bagl_component_t));
       }
     }
@@ -770,7 +778,7 @@ void io_seproxyhal_display_default(const bagl_element_t * element) {
       G_io_seproxyhal_spi_buffer[1] = length>>8;
       G_io_seproxyhal_spi_buffer[2] = length;
       io_seproxyhal_spi_send(G_io_seproxyhal_spi_buffer, 3);
-      io_seproxyhal_spi_send((unsigned char*)&element->component, sizeof(bagl_component_t));
+      io_seproxyhal_spi_send((unsigned char*)&element.component, sizeof(bagl_component_t));
     }
   }
 }
@@ -1607,6 +1615,44 @@ void ux_turner_display(unsigned int current_step,
 void ux_check_status_default(unsigned int status) {
   // nothing to be done here by default.
   UNUSED(status);
+}
+
+unsigned int ux_button_push_handler_invert(unsigned int button_mask, unsigned int button_mask_counter) {
+  if (button_mask & BUTTON_LEFT) {
+    button_mask &= ~BUTTON_LEFT;
+    button_mask |= BUTTON_RIGHT;
+  }
+  else
+  if (button_mask & BUTTON_RIGHT) {
+    button_mask &= ~BUTTON_RIGHT;
+    button_mask |= BUTTON_LEFT;
+  }
+  return ux.button_push_handler_original(button_mask, button_mask_counter);
+}
+
+void ux_invert() {
+  unsigned int i;
+  int crossId = -1, checkId = -1;
+  ux.element_invert_cross = NULL;
+  ux.element_invert_check = NULL;
+  if (cx_rng_u8() % 2) {
+    return;
+  }
+  for (i=0; i<ux.elements_count; i++) {
+    if (ux.elements[i].component.icon_id == BAGL_GLYPH_ICON_CROSS) {      
+      crossId = i;
+    }
+    else
+    if (ux.elements[i].component.icon_id  == BAGL_GLYPH_ICON_CHECK) {
+      checkId = i;
+    }
+  }
+  if ((crossId >= 0) && (checkId >= 0)) {
+    ux.element_invert_cross = &ux.elements[crossId];
+    ux.element_invert_check = &ux.elements[checkId];
+    ux.button_push_handler_original = ux.button_push_handler;
+    ux.button_push_handler = ux_button_push_handler_invert;
+  }
 }
 
 void ux_check_status(unsigned int status) __attribute__ ((weak, alias ("ux_check_status_default")));
